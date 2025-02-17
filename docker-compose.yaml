@@ -10,7 +10,7 @@ services:
     ports:
       - 9528:9528
     depends_on:
-      - rdp
+#      - rdp
       - vnc
 
   # 提供guac 协议
@@ -34,16 +34,16 @@ services:
 #      - 6901:6901
 
 
-  rdp: #rdp 图形界面Ubuntu虚拟机容器  远程桌面支持rdp协议  容器rdp端口 3389
-    image: umis/xubuntu-office-xrdp-desktop:v1.0
-    container_name: guacd-rdp.mojotv.cn  #容器名称 aka ( hostname,内网域名)
-    environment:
-      - "USERNAME:root"
-      - "PASSWORD:Docker"
-    depends_on:
-      - guacd
-#    ports:
-#      - 3389:3389
+#  rdp: #rdp 图形界面Ubuntu虚拟机容器  远程桌面支持rdp协议  容器rdp端口 3389
+#    image: umis/xubuntu-office-xrdp-desktop:v1.0
+#    container_name: guacd-rdp.mojotv.cn  #容器名称 aka ( hostname,内网域名)
+#    environment:
+#      - "USERNAME:root"
+#      - "PASSWORD:Docker"
+#    depends_on:
+#      - guacd
+##    ports:
+##      - 3389:3389
 
 networks:
   mojo:
