@@ -24,7 +24,7 @@ type ReqArg struct {
 	ScreenDpi     int    `form:"screen_dpi"`
 }
 
-//ApiWsGuacamole websocket 转 guacamole协议
+// ApiWsGuacamole websocket 转 guacamole协议
 func ApiWsGuacamole() gin.HandlerFunc {
 	//0. 初始化 websocket 配置
 	websocketReadBufferSize := guac.MaxGuacMessage
@@ -69,6 +69,7 @@ func ApiWsGuacamole() gin.HandlerFunc {
 		logrus.Println("3. 开始使用参数连接RDP远程桌面资产, 对应guacamole protocol 文档的handshake章节")
 		uid := ""
 
+		logrus.Printf("arg: %+v", arg)
 		pipeTunnel, err := guac.NewGuacamoleTunnel(arg.GuacadAddr, arg.AssetProtocol, arg.AssetHost, arg.AssetPort, arg.AssetUser, arg.AssetPassword, uid, arg.ScreenWidth, arg.ScreenHeight, arg.ScreenDpi)
 		if err != nil {
 			logrus.Error("Failed to upgrade websocket", err)
@@ -99,9 +100,11 @@ func ioCopy(ws *websocket.Conn, tunnl *guac.SimpleTunnel) {
 	defer tunnl.ReleaseReader()
 
 	//使用 errgroup 来处理(管理) goroutine for-loop, 防止 for-goroutine zombie
-	eg, _ := errgroup.WithContext(context.Background())
+	eg, ctx := errgroup.WithContext(context.Background())
+	logCh := make(chan string, 100) // buffered channel to hold log messages
 
 	eg.Go(func() error {
+		defer close(logCh) // close the channel when done
 		buf := bytes.NewBuffer(make([]byte, 0, guac.MaxGuacMessage*2))
 
 		for {
@@ -109,7 +112,7 @@ func ioCopy(ws *websocket.Conn, tunnl *guac.SimpleTunnel) {
 			if err != nil {
 				return err
 			}
-
+			logCh <- fmt.Sprintf("reader.ReadSome: %v", string(ins))
 			if bytes.HasPrefix(ins, guac.InternalOpcodeIns) {
 				// messages starting with the InternalDataOpcode are never sent to the websocket
 				continue
@@ -118,39 +121,53 @@ func ioCopy(ws *websocket.Conn, tunnl *guac.SimpleTunnel) {
 			if _, err = buf.Write(ins); err != nil {
 				return err
 			}
-
 			// if the buffer has more data in it or we've reached the max buffer size, send the data and reset
 			if !reader.Available() || buf.Len() >= guac.MaxGuacMessage {
 				if err = ws.WriteMessage(1, buf.Bytes()); err != nil {
 					if err == websocket.ErrCloseSent {
 						return fmt.Errorf("websocket:%v", err)
 					}
-					logrus.Traceln("Failed sending message to ws", err)
+					logCh <- fmt.Sprintf("Failed sending message to ws: %v", err)
 					return err
 				}
 				buf.Reset()
 			}
 		}
-
 	})
+
 	eg.Go(func() error {
 		for {
 			_, data, err := ws.ReadMessage()
 			if err != nil {
-				logrus.Traceln("Error reading message from ws", err)
+				logCh <- fmt.Sprintf("Error reading message from ws: %v", err)
 				return err
 			}
+			logCh <- fmt.Sprintf("ws.ReadMessage: %v", string(data))
 			if bytes.HasPrefix(data, guac.InternalOpcodeIns) {
 				// messages starting with the InternalDataOpcode are never sent to guacd
 				continue
 			}
 			if _, err = writer.Write(data); err != nil {
-				logrus.Traceln("Failed writing to guacd", err)
+				logCh <- fmt.Sprintf("Failed writing to guacd: %v", err)
 				return err
 			}
 		}
-
 	})
+
+	eg.Go(func() error {
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case logMsg, ok := <-logCh:
+				if !ok {
+					return nil
+				}
+				logrus.Println(logMsg)
+			}
+		}
+	})
+
 	if err := eg.Wait(); err != nil {
 		logrus.WithError(err).Error("session-err")
 	}

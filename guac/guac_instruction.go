@@ -3,6 +3,7 @@ package guac
 import (
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 //The Guacamole protocol consists of instructions. Each instruction is a comma-delimited list followed by a terminating semicolon, where the first element of the list is the instruction opcode, and all following elements are the arguments for that instruction:
@@ -54,52 +55,45 @@ func (i *Instruction) Byte() []byte {
 	return []byte(i.String())
 }
 
-//Parse 解析data 到 guacd instruction  todo:: 优化这个算法可以 提高net.io
+// Parse 解析data 到 guacd instruction  todo:: 优化这个算法可以 提高net.io
 func Parse(data []byte) (*Instruction, error) {
 	elementStart := 0
-
-	// Build list of elements
 	elements := make([]string, 0, 1)
+
 	for elementStart < len(data) {
 		// Find end of length
-		lengthEnd := -1
-		for i := elementStart; i < len(data); i++ {
-			if data[i] == '.' {
-				lengthEnd = i
-				break
-			}
-		}
-		// read() is required to return a complete instruction. If it does
-		// not, this is a severe internal error.
+		lengthEnd := strings.IndexByte(string(data[elementStart:]), '.')
 		if lengthEnd == -1 {
 			return nil, ErrServer.NewError("ReadSome returned incomplete instruction.")
 		}
+		lengthEnd += elementStart
 
 		// Parse length
-		length, e := strconv.Atoi(string(data[elementStart:lengthEnd]))
-		if e != nil {
-			return nil, ErrServer.NewError("ReadSome returned wrong pattern instruction.", e.Error())
+		length, err := strconv.Atoi(string(data[elementStart:lengthEnd]))
+		if err != nil {
+			return nil, ErrServer.NewError("ReadSome returned wrong pattern instruction.", err.Error())
 		}
 
 		// Parse element from just after period
 		elementStart = lengthEnd + 1
+		if elementStart+length > len(data) {
+			return nil, ErrServer.NewError("ReadSome returned incomplete element data.")
+		}
 		element := string(data[elementStart : elementStart+length])
-
-		// Append element to list of elements
 		elements = append(elements, element)
 
-		// ReadSome terminator after element
+		// Move to next element
 		elementStart += length
+		if elementStart >= len(data) {
+			return nil, ErrServer.NewError("ReadSome returned incomplete instruction.")
+		}
 		terminator := data[elementStart]
-
-		// Continue reading instructions after terminator
 		elementStart++
 
 		// If we've reached the end of the instruction
 		if terminator == ';' {
 			break
 		}
-
 	}
 
 	return NewInstruction(elements[0], elements[1:]...), nil

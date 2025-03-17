@@ -5,13 +5,13 @@ import (
 	"net"
 )
 
-//scheme: this.scheme,
-//hostname: this.hostname,
-//port: this.port,
-//'ignore-cert': this.ignoreCert,
-//security: this.security,
-//username: this.user,
-//password: this.pass
+// scheme: this.scheme,
+// hostname: this.hostname,
+// port: this.port,
+// 'ignore-cert': this.ignoreCert,
+// security: this.security,
+// username: this.user,
+// password: this.pass
 func NewGuacamoleTunnel(guacadAddr, protocol, host, port, user, password, uuid string, w, h, dpi int) (s *SimpleTunnel, err error) {
 	config := NewGuacamoleConfiguration()
 	config.ConnectionID = uuid
@@ -28,12 +28,15 @@ func NewGuacamoleTunnel(guacadAddr, protocol, host, port, user, password, uuid s
 		"security":    "",
 		"username":    user,
 		"password":    password,
+		//		"enable-sftp":      "true",
+		"enable-wallpaper": "true",
 	}
 	addr, err := net.ResolveTCPAddr("tcp", guacadAddr)
 	if err != nil {
 		logrus.Errorln("error while connecting to guacd", err)
 		return nil, err
 	}
+	logrus.Printf("connecting to guacd at guacadAddr: %v addr: %v", guacadAddr, addr)
 	conn, err := net.DialTCP("tcp", nil, addr)
 	if err != nil {
 		logrus.Errorln("error while connecting to guacd", err)

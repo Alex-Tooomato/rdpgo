@@ -38,6 +38,7 @@ func NewStream(conn net.Conn, timeout time.Duration) (ret *Stream) {
 
 // Write sends messages to Guacamole with a timeout
 func (s *Stream) Write(data []byte) (n int, err error) {
+	logrus.Printf("Write: %v", string(data))
 	if err = s.conn.SetWriteDeadline(time.Now().Add(s.timeout)); err != nil {
 		logrus.Error(err)
 		return
@@ -158,6 +159,7 @@ func (s *Stream) Close() error {
 
 // Handshake configures the guacd session
 func (s *Stream) Handshake(config *Config) error {
+	logrus.Printf("Handshake with config: %v", config)
 	// Get protocol / connection ID
 	selectArg := config.ConnectionID
 	if len(selectArg) == 0 {
@@ -175,6 +177,7 @@ func (s *Stream) Handshake(config *Config) error {
 	if err != nil {
 		return err
 	}
+	logrus.Printf("server args: %v", args.Args)
 
 	// Build Args list off provided names and config
 	argNameS := args.Args
@@ -233,6 +236,7 @@ func (s *Stream) Handshake(config *Config) error {
 	if err != nil {
 		return err
 	}
+	logrus.Printf("ready: %v", ready.Args)
 
 	readyArgs := ready.Args
 	if len(readyArgs) == 0 {
